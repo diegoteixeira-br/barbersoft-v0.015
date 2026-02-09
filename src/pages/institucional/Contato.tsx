@@ -19,18 +19,18 @@ const Contato = () => {
   const [isRecaptchaReady, setIsRecaptchaReady] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
-  // Load standard reCAPTCHA v3 script
+  // Load reCAPTCHA Enterprise script
   useEffect(() => {
-    if (window.grecaptcha?.ready) {
-      window.grecaptcha.ready(() => setIsRecaptchaReady(true));
+    if (window.grecaptcha?.enterprise) {
+      window.grecaptcha.enterprise.ready(() => setIsRecaptchaReady(true));
       return;
     }
 
-    const existingScript = document.querySelector(`script[src*="recaptcha/api.js"]`);
+    const existingScript = document.querySelector('script[src*="recaptcha/enterprise.js"]');
     if (existingScript) {
       const checkReady = setInterval(() => {
-        if (window.grecaptcha?.ready) {
-          window.grecaptcha.ready(() => {
+        if (window.grecaptcha?.enterprise) {
+          window.grecaptcha.enterprise.ready(() => {
             setIsRecaptchaReady(true);
             clearInterval(checkReady);
           });
@@ -40,12 +40,12 @@ const Contato = () => {
     }
 
     const script = document.createElement('script');
-    script.src = `https://www.google.com/recaptcha/api.js?render=${RECAPTCHA_SITE_KEY}`;
+    script.src = `https://www.google.com/recaptcha/enterprise.js?render=${RECAPTCHA_SITE_KEY}`;
     script.async = true;
     script.defer = true;
     
     script.onload = () => {
-      window.grecaptcha.ready(() => {
+      window.grecaptcha.enterprise.ready(() => {
         setIsRecaptchaReady(true);
       });
     };
@@ -83,9 +83,9 @@ const Contato = () => {
       // Get reCAPTCHA token
       let recaptchaToken = '';
       
-      if (window.grecaptcha) {
+      if (window.grecaptcha?.enterprise) {
         try {
-          recaptchaToken = await window.grecaptcha.execute(RECAPTCHA_SITE_KEY, {
+          recaptchaToken = await window.grecaptcha.enterprise.execute(RECAPTCHA_SITE_KEY, {
             action: 'contact_form'
           });
         } catch (recaptchaError) {

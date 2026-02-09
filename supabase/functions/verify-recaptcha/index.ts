@@ -6,6 +6,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const RECAPTCHA_SITE_KEY = "6Le2q2EsAAAAALT1XXCEYyPsT3gfauLb_0JgYXs7";
+const GOOGLE_CLOUD_PROJECT_ID = "barbersoft";
+
 interface RecaptchaRequest {
   token: string;
   action: string;
@@ -26,8 +29,8 @@ serve(async (req) => {
       );
     }
 
-    const secretKey = Deno.env.get("RECAPTCHA_SECRET_KEY");
-    if (!secretKey) {
+    const apiKey = Deno.env.get("RECAPTCHA_SECRET_KEY");
+    if (!apiKey) {
       console.error("RECAPTCHA_SECRET_KEY not configured");
       return new Response(
         JSON.stringify({ success: false, error: "Configuração inválida" }),
@@ -35,36 +38,46 @@ serve(async (req) => {
       );
     }
 
-    // Verify with standard reCAPTCHA v3 API
-    const formData = new URLSearchParams();
-    formData.append("secret", secretKey);
-    formData.append("response", token);
+    // Use reCAPTCHA Enterprise API
+    const verifyUrl = `https://recaptchaenterprise.googleapis.com/v1/projects/${GOOGLE_CLOUD_PROJECT_ID}/assessments?key=${apiKey}`;
 
-    const response = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+    const response = await fetch(verifyUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: formData.toString(),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: {
+          token,
+          siteKey: RECAPTCHA_SITE_KEY,
+          expectedAction: action,
+        },
+      }),
     });
 
     const result = await response.json();
 
-    console.log(`reCAPTCHA verification for action '${action}':`, {
-      success: result.success,
-      score: result.score,
-      expectedAction: action,
-      receivedAction: result.action,
-      hostname: result.hostname,
-    });
+    console.log(`reCAPTCHA Enterprise verification for action '${action}':`, JSON.stringify(result));
 
-    if (!result.success) {
-      console.error("reCAPTCHA verification failed:", result["error-codes"]);
+    if (!response.ok) {
+      console.error("reCAPTCHA Enterprise API error:", JSON.stringify(result));
       return new Response(
-        JSON.stringify({ success: false, error: "Verificação falhou", errorCodes: result["error-codes"] }),
+        JSON.stringify({ success: false, error: "Erro na verificação", details: result.error?.message }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const score = result.score ?? 1.0;
+    if (!result.tokenProperties?.valid) {
+      console.error("Token invalid:", result.tokenProperties?.invalidReason);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Verificação falhou",
+          errorCodes: [result.tokenProperties?.invalidReason || "invalid-token"],
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const score = result.riskAnalysis?.score ?? 1.0;
     if (score < 0.5) {
       console.warn(`Low reCAPTCHA score for action '${action}': ${score}`);
       return new Response(
@@ -74,7 +87,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, score, action: result.action }),
+      JSON.stringify({ success: true, score, action: result.tokenProperties?.action }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
