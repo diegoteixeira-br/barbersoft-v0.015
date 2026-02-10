@@ -148,10 +148,31 @@ export function QuickServiceModal({
         scheduled_time: now,
         payment_method: "",
       });
+      setIsSplit(false);
+      setSplitMethod1("cash");
+      setSplitMethod2("pix");
+      setSplitAmount1(0);
+      setSplitAmount2(0);
     }
   }, [open, form, activeBarbers]);
 
+  const totalPrice = form.watch("total_price");
+
+  const PAYMENT_METHODS = [
+    { value: "cash", label: "💵 Dinheiro" },
+    { value: "pix", label: "📱 PIX" },
+    { value: "debit_card", label: "💳 Débito" },
+    { value: "credit_card", label: "💳 Crédito" },
+  ];
+
+  const splitValid = isSplit && splitAmount1 > 0 && splitAmount2 > 0 && 
+    Math.abs(splitAmount1 + splitAmount2 - totalPrice) < 0.01 && 
+    splitMethod1 !== splitMethod2;
+
   const handleSubmit = async (data: FormData) => {
+    if (isSplit && !data.schedule_later) {
+      data.payment_method = `${splitMethod1}:${splitAmount1.toFixed(2)}|${splitMethod2}:${splitAmount2.toFixed(2)}`;
+    }
     await onSubmit(data);
     onOpenChange(false);
   };
