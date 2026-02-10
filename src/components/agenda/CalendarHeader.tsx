@@ -40,6 +40,8 @@ export function CalendarHeader({
   isRefreshing,
   isCompactMode,
   onToggleCompactMode,
+  showBusinessHoursOnly,
+  onToggleBusinessHours,
 }: CalendarHeaderProps) {
   const handleOpenDisplay = () => {
     window.open("/agenda/display", "_blank", "noopener,noreferrer");
