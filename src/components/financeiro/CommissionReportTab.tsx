@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { DollarSign, Wallet, TrendingUp, Banknote, Smartphone, CreditCard, Receipt, Info, Gift } from "lucide-react";
+import { getPaymentDistribution } from "@/utils/splitPayment";
 import { 
   useFinancialData, 
   getMonthRange,

@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { DollarSign, Calendar, TrendingUp, Users, Zap, Banknote, Smartphone, CreditCard, Gift } from "lucide-react";
+import { getPaymentDistribution } from "@/utils/splitPayment";
 import { startOfMonth, endOfMonth } from "date-fns";
 import { useFinancialData, getDateRanges } from "@/hooks/useFinancialData";
 import { RevenueCard } from "./RevenueCard";
