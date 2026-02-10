@@ -64,6 +64,7 @@ export function ProductsTable({ products, isLoading, onEdit, onDelete, onAdjustS
             <TableHead className="text-right">Custo</TableHead>
             <TableHead className="text-right">Venda</TableHead>
             <TableHead className="text-center">Margem</TableHead>
+            <TableHead className="text-center">Markup</TableHead>
             <TableHead className="text-center">Estoque</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="w-[50px]"></TableHead>
@@ -95,12 +96,21 @@ export function ProductsTable({ products, isLoading, onEdit, onDelete, onAdjustS
                   {formatCurrency(Number(product.sale_price))}
                 </TableCell>
                 <TableCell className="text-center">
-                  {Number(product.cost_price) > 0 ? (() => {
+                  {Number(product.cost_price) > 0 && Number(product.sale_price) > 0 ? (() => {
                     const margin = ((Number(product.sale_price) - Number(product.cost_price)) / Number(product.sale_price)) * 100;
                     const color = margin >= 30 ? "bg-green-500/20 text-green-400 border-green-500/30" 
                       : margin >= 10 ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" 
                       : "bg-red-500/20 text-red-400 border-red-500/30";
                     return <Badge className={color}>{margin.toFixed(1)}%</Badge>;
+                  })() : <span className="text-muted-foreground">-</span>}
+                </TableCell>
+                <TableCell className="text-center">
+                  {Number(product.cost_price) > 0 && Number(product.sale_price) > 0 ? (() => {
+                    const markup = ((Number(product.sale_price) - Number(product.cost_price)) / Number(product.cost_price)) * 100;
+                    const color = markup >= 30 ? "bg-green-500/20 text-green-400 border-green-500/30" 
+                      : markup >= 10 ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" 
+                      : "bg-red-500/20 text-red-400 border-red-500/30";
+                    return <Badge className={color}>{markup.toFixed(1)}%</Badge>;
                   })() : <span className="text-muted-foreground">-</span>}
                 </TableCell>
                 <TableCell className="text-center">

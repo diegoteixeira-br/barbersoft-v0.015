@@ -201,11 +201,20 @@ export function ProductFormModal({ open, onOpenChange, product }: ProductFormMod
               const salePrice = Number(form.watch("sale_price"));
               if (!costPrice || !salePrice) return null;
               const margin = ((salePrice - costPrice) / salePrice) * 100;
-              const color = margin >= 30 ? "text-green-400" : margin >= 10 ? "text-yellow-400" : "text-red-400";
+              const markup = ((salePrice - costPrice) / costPrice) * 100;
+              const marginColor = margin >= 30 ? "text-green-400" : margin >= 10 ? "text-yellow-400" : "text-red-400";
+              const markupColor = markup >= 30 ? "text-green-400" : markup >= 10 ? "text-yellow-400" : "text-red-400";
               return (
-                <div className={`text-sm font-medium ${color} flex items-center gap-1`}>
-                  Margem de Lucro: {margin.toFixed(1)}%
-                  {margin < 0 && <span className="text-xs">(prejuízo)</span>}
+                <div className="flex flex-col gap-1">
+                  <div className={`text-sm font-medium ${marginColor} flex items-center gap-1`}>
+                    Margem: {margin.toFixed(1)}%
+                    <span className="text-xs text-muted-foreground">(sobre venda)</span>
+                    {margin < 0 && <span className="text-xs">(prejuízo)</span>}
+                  </div>
+                  <div className={`text-sm font-medium ${markupColor} flex items-center gap-1`}>
+                    Markup: {markup.toFixed(1)}%
+                    <span className="text-xs text-muted-foreground">(sobre custo)</span>
+                  </div>
                 </div>
               );
             })()}
