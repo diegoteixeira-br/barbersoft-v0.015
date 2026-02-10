@@ -17,6 +17,12 @@ interface Barber {
   lunch_break_end?: string | null;
 }
 
+interface TimeSlot {
+  hour: number;
+  minute: number;
+  key: string; // "HH:MM"
+}
+
 interface CalendarWeekViewProps {
   currentDate: Date;
   appointments: Appointment[];
@@ -33,11 +39,32 @@ interface CalendarWeekViewProps {
   isOpenOnDate?: (date: Date) => boolean;
   getOpeningHours?: (date: Date) => { opening: string; closing: string } | null;
   isHoliday?: (date: Date) => Holiday | undefined;
+  showBusinessHoursOnly?: boolean;
 }
 
-const DEFAULT_HOUR_HEIGHT = 80;
-const MIN_HOUR_HEIGHT = 32;
+const DEFAULT_SLOT_HEIGHT = 28;
+const MIN_SLOT_HEIGHT = 20;
 const HEADER_HEIGHT = 56;
+
+function generateTimeSlots(startHour: number, endHour: number): TimeSlot[] {
+  const slots: TimeSlot[] = [];
+  for (let h = startHour; h < endHour; h++) {
+    for (let m = 0; m < 60; m += 15) {
+      slots.push({
+        hour: h,
+        minute: m,
+        key: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`,
+      });
+    }
+  }
+  return slots;
+}
+
+function slotKeyFromDate(date: Date): string {
+  const h = date.getHours();
+  const m = Math.floor(date.getMinutes() / 15) * 15;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
 
 export function CalendarWeekView({ 
   currentDate, 
@@ -55,6 +82,7 @@ export function CalendarWeekView({
   isOpenOnDate,
   getOpeningHours,
   isHoliday,
+  showBusinessHoursOnly = false,
 }: CalendarWeekViewProps) {
   const weekStart = startOfWeek(currentDate, { locale: ptBR });
   const weekEnd = endOfWeek(currentDate, { locale: ptBR });
@@ -62,14 +90,11 @@ export function CalendarWeekView({
   
   const { hour: currentHour, minute: currentMinute, isToday } = useCurrentTime(timezone);
 
-  // Check if showing all barbers (use ultra compact mode)
   const showAllBarbers = selectedBarberId === null && barbers.length > 0;
 
-  // Parse fallback opening and closing hours
   const fallbackOpeningHour = openingTime ? parseInt(openingTime.split(":")[0], 10) : 7;
   const fallbackClosingHour = closingTime ? parseInt(closingTime.split(":")[0], 10) : 21;
 
-  // Calculate min/max hours across all days of the week for display
   const { minHour, maxHour } = useMemo(() => {
     let min = fallbackOpeningHour;
     let max = fallbackClosingHour;
@@ -89,15 +114,13 @@ export function CalendarWeekView({
     return { minHour: min, maxHour: max };
   }, [days, getOpeningHours, fallbackOpeningHour, fallbackClosingHour]);
 
-  // Generate hours array based on business hours in compact mode
-  const HOURS = useMemo(() => {
-    if (isCompactMode) {
-      return Array.from({ length: maxHour - minHour }, (_, i) => i + minHour);
+  const TIME_SLOTS = useMemo(() => {
+    if (showBusinessHoursOnly) {
+      return generateTimeSlots(minHour, maxHour);
     }
-    return Array.from({ length: 14 }, (_, i) => i + 7);
-  }, [isCompactMode, minHour, maxHour]);
+    return generateTimeSlots(7, 23);
+  }, [showBusinessHoursOnly, minHour, maxHour]);
 
-  // Calculate dynamic height for compact mode and scrollbar width
   const [containerHeight, setContainerHeight] = useState(0);
   const [scrollbarWidth, setScrollbarWidth] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -123,64 +146,67 @@ export function CalendarWeekView({
     return () => observer.disconnect();
   }, []);
 
-  const hourHeight = useMemo(() => {
-    if (!isCompactMode) return DEFAULT_HOUR_HEIGHT;
+  const slotHeight = useMemo(() => {
+    if (!isCompactMode) return DEFAULT_SLOT_HEIGHT;
     
     const effectiveHeight = containerHeight > 0 
       ? containerHeight 
       : window.innerHeight - 220;
     
     const availableHeight = effectiveHeight - HEADER_HEIGHT;
-    const calculatedHeight = Math.floor(availableHeight / HOURS.length);
-    return Math.max(MIN_HOUR_HEIGHT, calculatedHeight);
-  }, [isCompactMode, containerHeight, HOURS.length]);
+    const calculatedHeight = Math.floor(availableHeight / TIME_SLOTS.length);
+    return Math.max(MIN_SLOT_HEIGHT, calculatedHeight);
+  }, [isCompactMode, containerHeight, TIME_SLOTS.length]);
 
-  // Organize appointments by day and hour
-  const appointmentsByDayAndHour = useMemo(() => {
-    const map: Record<string, Record<number, Appointment[]>> = {};
+  const appointmentsByDayAndSlot = useMemo(() => {
+    const map: Record<string, Record<string, Appointment[]>> = {};
     
     days.forEach(day => {
       const dayKey = format(day, "yyyy-MM-dd");
       map[dayKey] = {};
-      HOURS.forEach(hour => {
-        map[dayKey][hour] = [];
+      TIME_SLOTS.forEach(slot => {
+        map[dayKey][slot.key] = [];
       });
     });
 
     appointments.forEach(apt => {
       const aptDate = new Date(apt.start_time);
       const dayKey = format(aptDate, "yyyy-MM-dd");
-      const hour = aptDate.getHours();
+      const sk = slotKeyFromDate(aptDate);
       
-      if (map[dayKey] && map[dayKey][hour]) {
-        map[dayKey][hour].push(apt);
+      if (map[dayKey] && map[dayKey][sk]) {
+        map[dayKey][sk].push(apt);
       }
     });
 
     return map;
-  }, [appointments, days, HOURS]);
+  }, [appointments, days, TIME_SLOTS]);
 
-  // Calculate current time indicator position
-  const firstHour = HOURS[0];
-  const lastHour = HOURS[HOURS.length - 1];
-  const showTimeIndicator = currentHour >= firstHour && currentHour < lastHour + 1;
-  const timeIndicatorPosition = (currentHour - firstHour) * hourHeight + (currentMinute / 60) * hourHeight;
+  const firstSlot = TIME_SLOTS[0];
+  const lastSlot = TIME_SLOTS[TIME_SLOTS.length - 1];
+  const firstSlotMinutes = firstSlot.hour * 60 + firstSlot.minute;
+  const lastSlotMinutes = lastSlot.hour * 60 + lastSlot.minute + 15;
+  const currentMinutes = currentHour * 60 + currentMinute;
+  const showTimeIndicator = currentMinutes >= firstSlotMinutes && currentMinutes < lastSlotMinutes;
+  const timeIndicatorPosition = ((currentMinutes - firstSlotMinutes) / 15) * slotHeight;
 
-  // Check if a specific hour is within business hours for a specific day
-  const isWithinBusinessHoursForDay = (day: Date, hour: number) => {
+  const isWithinBusinessHoursForDay = (day: Date, hour: number, minute: number) => {
     if (getOpeningHours) {
       const hours = getOpeningHours(day);
       if (hours) {
-        const dayOpen = parseInt(hours.opening.split(":")[0], 10);
-        const dayClose = parseInt(hours.closing.split(":")[0], 10);
-        return hour >= dayOpen && hour < dayClose;
+        const dayOpenParts = hours.opening.split(":");
+        const dayCloseParts = hours.closing.split(":");
+        const dayOpenMin = parseInt(dayOpenParts[0], 10) * 60 + parseInt(dayOpenParts[1] || "0", 10);
+        const dayCloseMin = parseInt(dayCloseParts[0], 10) * 60 + parseInt(dayCloseParts[1] || "0", 10);
+        const slotMin = hour * 60 + minute;
+        return slotMin >= dayOpenMin && slotMin < dayCloseMin;
       }
     }
-    return hour >= fallbackOpeningHour && hour < fallbackClosingHour;
+    const slotMin = hour * 60 + minute;
+    return slotMin >= fallbackOpeningHour * 60 && slotMin < fallbackClosingHour * 60;
   };
 
-  // Check if a specific hour slot overlaps with selected barber's lunch break
-  const isWithinLunchBreak = (hour: number) => {
+  const isWithinLunchBreak = (hour: number, minute: number) => {
     if (!selectedBarberId) return false;
     
     const barber = barbers.find(b => b.id === selectedBarberId);
@@ -188,11 +214,13 @@ export function CalendarWeekView({
       return false;
     }
     
-    const [startHour] = barber.lunch_break_start.split(":").map(Number);
-    const [endHour, endMin] = barber.lunch_break_end.split(":").map(Number);
-    const lunchEndHour = endMin > 0 ? endHour : endHour;
+    const [startH, startM] = barber.lunch_break_start.split(":").map(Number);
+    const [endH, endM] = barber.lunch_break_end.split(":").map(Number);
+    const slotMin = hour * 60 + minute;
+    const lunchStart = startH * 60 + (startM || 0);
+    const lunchEnd = endH * 60 + (endM || 0);
     
-    return hour >= startHour && hour < lunchEndHour;
+    return slotMin >= lunchStart && slotMin < lunchEnd;
   };
 
   const selectedBarber = selectedBarberId ? barbers.find(b => b.id === selectedBarberId) : null;
@@ -247,13 +275,15 @@ export function CalendarWeekView({
           <div className="grid grid-cols-8 relative">
             {/* Time column */}
             <div className="border-r border-border">
-              {HOURS.map(hour => (
+              {TIME_SLOTS.map(slot => (
                 <div
-                  key={hour}
-                  className="border-b border-border text-xs text-muted-foreground text-right pr-2 flex items-start justify-end pt-1"
-                  style={{ height: DEFAULT_HOUR_HEIGHT }}
+                  key={slot.key}
+                  className={`border-b border-border text-xs text-muted-foreground text-right pr-2 flex items-start justify-end pt-0.5 ${
+                    slot.minute === 0 ? "font-medium" : "text-muted-foreground/60"
+                  }`}
+                  style={{ height: slotHeight }}
                 >
-                  {String(hour).padStart(2, "0")}:00
+                  {slot.key}
                 </div>
               ))}
             </div>
@@ -266,7 +296,7 @@ export function CalendarWeekView({
               
               return (
                 <div key={day.toISOString()} className={`border-r border-border last:border-r-0 relative ${isClosed ? "bg-muted/30" : ""}`}>
-                  {/* Current time indicator - only on today's column */}
+                  {/* Current time indicator */}
                   {isDayToday && showTimeIndicator && !isClosed && (
                     <div
                       className="absolute left-0 right-0 z-20 pointer-events-none"
@@ -288,16 +318,17 @@ export function CalendarWeekView({
                     </div>
                   )}
                   
-                  {HOURS.map(hour => {
-                    const slotAppointments = appointmentsByDayAndHour[dayKey]?.[hour] || [];
-                    const slotDate = setMinutes(setHours(day, hour), 0);
-                    const withinHours = isWithinBusinessHoursForDay(day, hour);
-                    const isLunchBreak = isWithinLunchBreak(hour);
+                  {TIME_SLOTS.map(slot => {
+                    const slotAppointments = appointmentsByDayAndSlot[dayKey]?.[slot.key] || [];
+                    const slotDate = setMinutes(setHours(day, slot.hour), slot.minute);
+                    const withinHours = isWithinBusinessHoursForDay(day, slot.hour, slot.minute);
+                    const isLunchBreak = isWithinLunchBreak(slot.hour, slot.minute);
+                    const isHourBoundary = slot.minute === 0;
 
                     return (
                       <div
-                        key={hour}
-                        className={`border-b border-border p-0.5 transition-colors ${
+                        key={slot.key}
+                        className={`${isHourBoundary ? "border-b border-border" : "border-b border-border/30"} p-0.5 transition-colors ${
                           isClosed 
                             ? "bg-muted/40 cursor-not-allowed" 
                             : isLunchBreak
@@ -308,17 +339,17 @@ export function CalendarWeekView({
                                     : ""
                                 } ${isDayToday && withinHours ? "bg-blue-100/50 dark:bg-blue-900/30" : ""}`
                         }`}
-                        style={{ height: DEFAULT_HOUR_HEIGHT }}
+                        style={{ height: slotHeight }}
                         onClick={() => !isClosed && !isLunchBreak && onSlotClick(slotDate)}
                       >
-                        {isLunchBreak && slotAppointments.length === 0 && !isClosed ? (
+                        {isLunchBreak && slotAppointments.length === 0 && !isClosed && slot.minute === 0 ? (
                           <div className="h-full flex items-center justify-center gap-1 text-orange-600 dark:text-orange-400">
                             <Coffee className="h-3 w-3" />
                             <span className="text-[10px] font-medium">Intervalo</span>
                           </div>
                         ) : (
                           <div className={`space-y-0.5 h-full ${
-                            showAllBarbers && slotAppointments.length > 2 
+                            showAllBarbers && slotAppointments.length > 1 
                               ? "overflow-y-auto" 
                               : "overflow-hidden"
                           }`}>

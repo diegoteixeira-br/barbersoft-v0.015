@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Plus, Calendar, Zap, RefreshCw, Tv, Maximize2, Minimize2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar, Zap, RefreshCw, Tv, Maximize2, Minimize2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -22,6 +22,8 @@ interface CalendarHeaderProps {
   isRefreshing?: boolean;
   isCompactMode?: boolean;
   onToggleCompactMode?: () => void;
+  showBusinessHoursOnly?: boolean;
+  onToggleBusinessHours?: () => void;
 }
 
 export function CalendarHeader({
@@ -38,6 +40,8 @@ export function CalendarHeader({
   isRefreshing,
   isCompactMode,
   onToggleCompactMode,
+  showBusinessHoursOnly,
+  onToggleBusinessHours,
 }: CalendarHeaderProps) {
   const handleOpenDisplay = () => {
     window.open("/agenda/display", "_blank", "noopener,noreferrer");
@@ -147,6 +151,23 @@ export function CalendarHeader({
             </TooltipTrigger>
             <TooltipContent>
               {isCompactMode ? "Modo normal (com scroll)" : "Modo compacto (caber na tela)"}
+            </TooltipContent>
+          </Tooltip>
+        )}
+
+        {view !== "month" && onToggleBusinessHours && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant={showBusinessHoursOnly ? "default" : "outline"} 
+                size="icon" 
+                onClick={onToggleBusinessHours}
+              >
+                <Clock className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {showBusinessHoursOnly ? "Mostrar todos os horários (7h-23h)" : "Somente horário comercial"}
             </TooltipContent>
           </Tooltip>
         )}

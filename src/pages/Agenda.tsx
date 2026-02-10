@@ -39,6 +39,10 @@ export default function Agenda() {
     const saved = localStorage.getItem("agenda-compact-mode");
     return saved === "true";
   });
+  const [showBusinessHoursOnly, setShowBusinessHoursOnly] = useState(() => {
+    const saved = localStorage.getItem("agenda-business-hours-only");
+    return saved === "true";
+  });
   
   // Modal states
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -52,6 +56,14 @@ export default function Agenda() {
     setIsCompactMode(prev => {
       const newValue = !prev;
       localStorage.setItem("agenda-compact-mode", String(newValue));
+      return newValue;
+    });
+  };
+
+  const handleToggleBusinessHours = () => {
+    setShowBusinessHoursOnly(prev => {
+      const newValue = !prev;
+      localStorage.setItem("agenda-business-hours-only", String(newValue));
       return newValue;
     });
   };
@@ -214,6 +226,8 @@ export default function Agenda() {
               isRefreshing={appointmentsFetching}
               isCompactMode={isCompactMode}
               onToggleCompactMode={handleToggleCompactMode}
+              showBusinessHoursOnly={showBusinessHoursOnly}
+              onToggleBusinessHours={handleToggleBusinessHours}
             />
 
             {isLoading ? (
@@ -242,6 +256,7 @@ export default function Agenda() {
                     isOpenOnDate={isOpenOnDate}
                     getOpeningHours={getOpeningHours}
                     isHoliday={isHoliday}
+                    showBusinessHoursOnly={showBusinessHoursOnly}
                   />
                 )}
                 {view === "day" && (
@@ -261,6 +276,7 @@ export default function Agenda() {
                     isOpenOnDate={isOpenOnDate}
                     getOpeningHours={getOpeningHours}
                     isHoliday={isHoliday}
+                    showBusinessHoursOnly={showBusinessHoursOnly}
                   />
                 )}
                 {view === "month" && (

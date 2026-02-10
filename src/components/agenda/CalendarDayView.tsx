@@ -8,6 +8,12 @@ import type { Barber } from "@/hooks/useBarbers";
 import type { BusinessHour, Holiday } from "@/hooks/useBusinessHours";
 import { Coffee } from "lucide-react";
 
+interface TimeSlot {
+  hour: number;
+  minute: number;
+  key: string;
+}
+
 interface CalendarDayViewProps {
   currentDate: Date;
   appointments: Appointment[];
@@ -24,11 +30,32 @@ interface CalendarDayViewProps {
   isOpenOnDate?: (date: Date) => boolean;
   getOpeningHours?: (date: Date) => { opening: string; closing: string } | null;
   isHoliday?: (date: Date) => Holiday | undefined;
+  showBusinessHoursOnly?: boolean;
 }
 
-const DEFAULT_HOUR_HEIGHT = 96;
-const MIN_HOUR_HEIGHT = 32;
+const DEFAULT_SLOT_HEIGHT = 28;
+const MIN_SLOT_HEIGHT = 20;
 const HEADER_HEIGHT = 64;
+
+function generateTimeSlots(startHour: number, endHour: number): TimeSlot[] {
+  const slots: TimeSlot[] = [];
+  for (let h = startHour; h < endHour; h++) {
+    for (let m = 0; m < 60; m += 15) {
+      slots.push({
+        hour: h,
+        minute: m,
+        key: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`,
+      });
+    }
+  }
+  return slots;
+}
+
+function slotKeyFromDate(date: Date): string {
+  const h = date.getHours();
+  const m = Math.floor(date.getMinutes() / 15) * 15;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
 
 export function CalendarDayView({
   currentDate,
@@ -44,6 +71,7 @@ export function CalendarDayView({
   isOpenOnDate,
   getOpeningHours,
   isHoliday,
+  showBusinessHoursOnly = false,
 }: CalendarDayViewProps) {
   const activeBarbers = useMemo(
     () => barbers.filter(b => b.is_active && (!selectedBarberId || b.id === selectedBarberId)),
@@ -55,7 +83,6 @@ export function CalendarDayView({
   const isClosed = isOpenOnDate ? !isOpenOnDate(currentDate) : false;
   const holiday = isHoliday ? isHoliday(currentDate) : undefined;
 
-  // Get specific hours for this day, or use fallback
   const dayHours = getOpeningHours ? getOpeningHours(currentDate) : null;
   const openingHour = dayHours 
     ? parseInt(dayHours.opening.split(":")[0], 10) 
@@ -64,12 +91,12 @@ export function CalendarDayView({
     ? parseInt(dayHours.closing.split(":")[0], 10) 
     : (closingTime ? parseInt(closingTime.split(":")[0], 10) : 21);
 
-  const HOURS = useMemo(() => {
-    if (isCompactMode) {
-      return Array.from({ length: closingHour - openingHour }, (_, i) => i + openingHour);
+  const TIME_SLOTS = useMemo(() => {
+    if (showBusinessHoursOnly) {
+      return generateTimeSlots(openingHour, closingHour);
     }
-    return Array.from({ length: 14 }, (_, i) => i + 7);
-  }, [isCompactMode, openingHour, closingHour]);
+    return generateTimeSlots(7, 23);
+  }, [showBusinessHoursOnly, openingHour, closingHour]);
 
   const [containerHeight, setContainerHeight] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -85,48 +112,55 @@ export function CalendarDayView({
     return () => observer.disconnect();
   }, []);
 
-  const hourHeight = useMemo(() => {
-    if (!isCompactMode) return DEFAULT_HOUR_HEIGHT;
+  const slotHeight = useMemo(() => {
+    if (!isCompactMode) return DEFAULT_SLOT_HEIGHT;
     const effectiveHeight = containerHeight > 0 ? containerHeight : window.innerHeight - 220;
     const availableHeight = effectiveHeight - HEADER_HEIGHT;
-    const calculatedHeight = Math.floor(availableHeight / HOURS.length);
-    return Math.max(MIN_HOUR_HEIGHT, calculatedHeight);
-  }, [isCompactMode, containerHeight, HOURS.length]);
+    const calculatedHeight = Math.floor(availableHeight / TIME_SLOTS.length);
+    return Math.max(MIN_SLOT_HEIGHT, calculatedHeight);
+  }, [isCompactMode, containerHeight, TIME_SLOTS.length]);
 
-  const appointmentsByBarberAndHour = useMemo(() => {
-    const map: Record<string, Record<number, Appointment[]>> = {};
+  const appointmentsByBarberAndSlot = useMemo(() => {
+    const map: Record<string, Record<string, Appointment[]>> = {};
     activeBarbers.forEach(barber => {
       map[barber.id] = {};
-      HOURS.forEach(hour => { map[barber.id][hour] = []; });
+      TIME_SLOTS.forEach(slot => { map[barber.id][slot.key] = []; });
     });
     appointments.forEach(apt => {
       if (!apt.barber_id) return;
-      const hour = new Date(apt.start_time).getHours();
-      if (map[apt.barber_id] && map[apt.barber_id][hour]) {
-        map[apt.barber_id][hour].push(apt);
+      const sk = slotKeyFromDate(new Date(apt.start_time));
+      if (map[apt.barber_id] && map[apt.barber_id][sk]) {
+        map[apt.barber_id][sk].push(apt);
       }
     });
     return map;
-  }, [appointments, activeBarbers, HOURS]);
+  }, [appointments, activeBarbers, TIME_SLOTS]);
 
-  const firstHour = HOURS[0];
-  const lastHour = HOURS[HOURS.length - 1];
-  const showTimeIndicator = today && currentHour >= firstHour && currentHour < lastHour + 1;
-  const timeIndicatorPosition = (currentHour - firstHour) * hourHeight + (currentMinute / 60) * hourHeight;
+  const firstSlot = TIME_SLOTS[0];
+  const lastSlot = TIME_SLOTS[TIME_SLOTS.length - 1];
+  const firstSlotMinutes = firstSlot.hour * 60 + firstSlot.minute;
+  const lastSlotMinutes = lastSlot.hour * 60 + lastSlot.minute + 15;
+  const currentMinutes = currentHour * 60 + currentMinute;
+  const showTimeIndicator = today && currentMinutes >= firstSlotMinutes && currentMinutes < lastSlotMinutes;
+  const timeIndicatorPosition = ((currentMinutes - firstSlotMinutes) / 15) * slotHeight;
 
-  const isWithinBusinessHours = (hour: number) => hour >= openingHour && hour < closingHour;
+  const isWithinBusinessHours = (hour: number, minute: number) => {
+    const slotMin = hour * 60 + minute;
+    return slotMin >= openingHour * 60 && slotMin < closingHour * 60;
+  };
 
-  // Check if a specific hour slot overlaps with a barber's lunch break
-  const isWithinLunchBreak = (barber: Barber, hour: number) => {
+  const isWithinLunchBreak = (barber: Barber, hour: number, minute: number) => {
     if (!barber.lunch_break_enabled || !barber.lunch_break_start || !barber.lunch_break_end) {
       return false;
     }
     
-    const [startHour] = barber.lunch_break_start.split(":").map(Number);
-    const [endHour, endMin] = barber.lunch_break_end.split(":").map(Number);
-    const lunchEndHour = endMin > 0 ? endHour : endHour;
+    const [startH, startM] = barber.lunch_break_start.split(":").map(Number);
+    const [endH, endM] = barber.lunch_break_end.split(":").map(Number);
+    const slotMin = hour * 60 + minute;
+    const lunchStart = startH * 60 + (startM || 0);
+    const lunchEnd = endH * 60 + (endM || 0);
     
-    return hour >= startHour && hour < lunchEndHour;
+    return slotMin >= lunchStart && slotMin < lunchEnd;
   };
 
   return (
@@ -167,24 +201,37 @@ export function CalendarDayView({
                 </div>
               )}
               <div className="border-r border-border">
-                {HOURS.map(hour => (
-                  <div key={hour} className={`border-b border-border flex items-start justify-end pr-2 pt-1 ${isWithinBusinessHours(hour) ? "bg-blue-100/40 dark:bg-blue-900/20" : ""}`} style={{ height: DEFAULT_HOUR_HEIGHT }}>
-                    <span className="text-sm text-muted-foreground">{String(hour).padStart(2, "0")}:00</span>
-                  </div>
-                ))}
+                {TIME_SLOTS.map(slot => {
+                  const withinHours = isWithinBusinessHours(slot.hour, slot.minute);
+                  const isHourBoundary = slot.minute === 0;
+                  return (
+                    <div 
+                      key={slot.key} 
+                      className={`${isHourBoundary ? "border-b border-border" : "border-b border-border/30"} flex items-start justify-end pr-2 pt-0.5 ${
+                        withinHours ? "bg-blue-100/40 dark:bg-blue-900/20" : ""
+                      } ${slot.minute === 0 ? "font-medium" : ""}`} 
+                      style={{ height: slotHeight }}
+                    >
+                      <span className={`text-xs text-muted-foreground ${slot.minute !== 0 ? "text-muted-foreground/60" : ""}`}>
+                        {slot.key}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
               {activeBarbers.map(barber => (
                 <div key={barber.id} className="border-r border-border last:border-r-0">
-                  {HOURS.map(hour => {
-                    const slotAppointments = appointmentsByBarberAndHour[barber.id]?.[hour] || [];
-                    const slotDate = setMinutes(setHours(currentDate, hour), 0);
-                    const withinHours = isWithinBusinessHours(hour);
-                    const isLunchBreak = isWithinLunchBreak(barber, hour);
+                  {TIME_SLOTS.map(slot => {
+                    const slotAppointments = appointmentsByBarberAndSlot[barber.id]?.[slot.key] || [];
+                    const slotDate = setMinutes(setHours(currentDate, slot.hour), slot.minute);
+                    const withinHours = isWithinBusinessHours(slot.hour, slot.minute);
+                    const isLunchBreak = isWithinLunchBreak(barber, slot.hour, slot.minute);
+                    const isHourBoundary = slot.minute === 0;
                     
                     return (
                       <div 
-                        key={hour} 
-                        className={`border-b border-border p-1 transition-colors ${
+                        key={slot.key} 
+                        className={`${isHourBoundary ? "border-b border-border" : "border-b border-border/30"} p-0.5 transition-colors ${
                           isLunchBreak 
                             ? "bg-orange-100/60 dark:bg-orange-900/20 cursor-not-allowed" 
                             : `cursor-pointer hover:bg-muted/30 ${
@@ -193,16 +240,16 @@ export function CalendarDayView({
                                   : ""
                               } ${today && withinHours ? "bg-blue-100/50 dark:bg-blue-900/30" : ""}`
                         }`}
-                        style={{ height: DEFAULT_HOUR_HEIGHT }} 
+                        style={{ height: slotHeight }} 
                         onClick={() => !isLunchBreak && onSlotClick(slotDate, barber.id)}
                       >
-                        {isLunchBreak && slotAppointments.length === 0 ? (
+                        {isLunchBreak && slotAppointments.length === 0 && slot.minute === 0 ? (
                           <div className="h-full flex items-center justify-center gap-1 text-orange-600 dark:text-orange-400">
-                            <Coffee className="h-4 w-4" />
-                            <span className="text-xs font-medium">Intervalo</span>
+                            <Coffee className="h-3 w-3" />
+                            <span className="text-[10px] font-medium">Intervalo</span>
                           </div>
                         ) : (
-                          <div className="space-y-1 overflow-hidden h-full">
+                          <div className="space-y-0.5 overflow-hidden h-full">
                             {slotAppointments.map(apt => (
                               <CalendarEvent key={apt.id} appointment={apt} onClick={() => onAppointmentClick(apt)} />
                             ))}
