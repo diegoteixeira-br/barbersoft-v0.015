@@ -374,7 +374,7 @@ export function CalendarWeekView({
                     </div>
                   )}
                   
-                  {/* Grid slots (background) */}
+                  {/* Grid slots (background + inline events for all-barbers mode) */}
                   {TIME_SLOTS.map(slot => {
                     const slotAppointments = appointmentsByDayAndSlot[dayKey]?.[slot.key] || [];
                     const slotDate = setMinutes(setHours(day, slot.hour), slot.minute);
@@ -405,12 +405,27 @@ export function CalendarWeekView({
                             <span className="text-[10px] font-medium">Intervalo</span>
                           </div>
                         )}
+                        {/* Inline compact events for "all barbers" mode */}
+                        {showAllBarbers && slotAppointments.length > 0 && (
+                          <div className={`space-y-0.5 h-full ${
+                            slotAppointments.length > 1 ? "overflow-y-auto" : "overflow-hidden"
+                          }`}>
+                            {slotAppointments.map(apt => (
+                              <CalendarEvent
+                                key={apt.id}
+                                appointment={apt}
+                                onClick={() => onAppointmentClick(apt)}
+                                ultraCompact
+                              />
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
 
-                  {/* Positioned appointment blocks */}
-                  {positionedEvents.map(({ apt, col, totalCols }) => {
+                  {/* Positioned appointment blocks - only when a specific barber is selected */}
+                  {!showAllBarbers && positionedEvents.map(({ apt, col, totalCols }) => {
                     const aptStart = new Date(apt.start_time);
                     const aptEnd = new Date(apt.end_time);
                     const startMinutes = aptStart.getHours() * 60 + aptStart.getMinutes();
