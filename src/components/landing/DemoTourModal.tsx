@@ -37,13 +37,13 @@ interface DemoTourModalProps {
 
 // Narration texts for each slide
 const narrationTexts = [
-  "Painel de Controle Inteligente. Visualize seu faturamento, agendamentos, quantidade de clientes e ticket médio em tempo real. Acompanhe o desempenho semanal e os próximos horários agendados.",
-  "Agenda Completa. Visualize seus agendamentos por dia, semana ou mês. Filtre por profissional e veja todos os detalhes de cada atendimento em um calendário visual e intuitivo.",
-  "Controle Financeiro Total. Acompanhe sua receita, despesas e lucro em tempo real. Veja as comissões de cada profissional e tenha controle total do seu caixa.",
-  "Gestão de Clientes. Acesse o histórico completo de cada cliente, identifique os clientes VIP, veja a frequência de visitas e nunca mais perca um aniversário.",
-  "Integração WhatsApp. Conecte seu WhatsApp escaneando um QR Code e configure mensagens automáticas para lembretes de agendamento, aniversários e resgate de clientes inativos.",
-  "Marketing Inteligente. Crie campanhas em massa, acompanhe a taxa de abertura e conversões. Automatize lembretes de aniversário e recupere clientes que não voltaram.",
-  "Gestão Multi-Unidades. Gerencie todas as suas filiais de forma centralizada. Acompanhe o faturamento, agendamentos e desempenho de cada unidade em um só lugar.",
+  "Painel de Controle Inteligente. Acompanhe faturamento, agendamentos, clientes e ticket médio em tempo real. Veja o desempenho semanal da sua barbearia e os próximos horários agendados, tudo em uma tela.",
+  "Agenda Completa. Gerencie seus agendamentos por dia, semana ou mês. Filtre por profissional, veja os detalhes de cada atendimento e organize a rotina da sua equipe com um calendário visual e intuitivo.",
+  "Controle Financeiro Total. Tenha controle completo do caixa da sua barbearia. Acompanhe receita, despesas e lucro em tempo real. Veja as comissões de cada profissional calculadas automaticamente.",
+  "Gestão de Clientes. Acesse o histórico completo de cada cliente, identifique os VIPs, acompanhe a frequência de visitas e o programa de fidelidade. Nunca mais perca um aniversário.",
+  "Integração WhatsApp. Conecte seu WhatsApp em segundos escaneando um QR Code. Configure lembretes automáticos de agendamento, mensagens de aniversário e resgate de clientes inativos.",
+  "Marketing Inteligente. Envie campanhas em massa pelo WhatsApp, acompanhe taxas de abertura e conversões. Automatize lembretes de aniversário e recupere clientes que não voltaram há muito tempo.",
+  "Gestão Multi-Unidades. Gerencie todas as suas filiais de forma centralizada. Acompanhe o faturamento, agendamentos e desempenho de cada unidade em um só painel.",
 ];
 
 // Dashboard Preview Slide
@@ -380,14 +380,21 @@ const UnidadesSlide = () => (
         <Star className="w-5 h-5 text-primary" />
       </div>
       <p className="text-sm text-muted-foreground mb-4">
-        Comece agora mesmo gratuitamente e veja resultados em poucos dias!
+        Escolha o plano ideal e comece a ver resultados em poucos dias!
       </p>
       <a
-        href="/auth"
+        href="#precos"
+        onClick={(e) => {
+          e.preventDefault();
+          const el = document.getElementById("precos");
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth" });
+          }
+        }}
         className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-full font-semibold text-sm hover:bg-primary/90 transition-all hover:scale-105 shadow-lg shadow-primary/30"
       >
         <CheckCircle className="w-4 h-4" />
-        Começar Teste Grátis
+        Conheça os Planos
       </a>
     </div>
   </div>
@@ -474,7 +481,7 @@ export const DemoTourModal = ({ open, onOpenChange }: DemoTourModalProps) => {
       audioRef.current = null;
     }
 
-    // Check cache first
+    // Check in-memory cache first (URL already fetched this session)
     if (audioCache.current.has(slideIndex)) {
       const audioUrl = audioCache.current.get(slideIndex)!;
       const audio = new Audio(audioUrl);
@@ -487,16 +494,17 @@ export const DemoTourModal = ({ open, onOpenChange }: DemoTourModalProps) => {
     setIsLoadingAudio(true);
 
     try {
+      // Call the generate-demo-audio edge function (returns cached URL or generates new)
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
+        `https://lgrugpsyewvinlkgmeve.supabase.co/functions/v1/generate-demo-audio`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxncnVncHN5ZXd2aW5sa2dtZXZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA0NzUwMDIsImV4cCI6MjA4NjA1MTAwMn0.DHvyTlG1O0EyA3ajkx7dUrmJD_BmUtjFogo3NhL9b_U",
           },
           body: JSON.stringify({ 
+            slideIndex,
             text: narrationTexts[slideIndex],
           }),
           signal: currentAbortController.signal,
@@ -507,17 +515,17 @@ export const DemoTourModal = ({ open, onOpenChange }: DemoTourModalProps) => {
       if (currentAbortController.signal.aborted) return;
 
       if (!response.ok) {
-        throw new Error(`TTS request failed: ${response.status}`);
+        throw new Error(`Audio request failed: ${response.status}`);
       }
 
-      const audioBlob = await response.blob();
+      const data = await response.json();
       
-      // Check again if aborted before playing
+      // Check again if aborted
       if (currentAbortController.signal.aborted) return;
       
-      const audioUrl = URL.createObjectURL(audioBlob);
+      const audioUrl = data.audioUrl;
       
-      // Cache the audio URL
+      // Cache the URL for this session
       audioCache.current.set(slideIndex, audioUrl);
 
       const audio = new Audio(audioUrl);
@@ -525,7 +533,6 @@ export const DemoTourModal = ({ open, onOpenChange }: DemoTourModalProps) => {
       audio.onended = () => setAudioEnded(true);
       await audio.play();
     } catch (error) {
-      // Ignore abort errors (expected when changing slides)
       if (error instanceof Error && error.name === 'AbortError') {
         console.log(`Audio request for slide ${slideIndex} was cancelled`);
         return;
@@ -536,41 +543,6 @@ export const DemoTourModal = ({ open, onOpenChange }: DemoTourModalProps) => {
     }
   }, [isMuted]);
 
-  // Preload all audio in background when modal opens
-  const preloadAllAudio = useCallback(async () => {
-    const preloadPromises = narrationTexts.map(async (text, index) => {
-      // Skip if already cached
-      if (audioCache.current.has(index)) return;
-
-      try {
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            },
-            body: JSON.stringify({ text }),
-          }
-        );
-
-        if (response.ok) {
-          const audioBlob = await response.blob();
-          const audioUrl = URL.createObjectURL(audioBlob);
-          audioCache.current.set(index, audioUrl);
-          console.log(`Preloaded audio for slide ${index + 1}`);
-        }
-      } catch (error) {
-        console.error(`Failed to preload audio for slide ${index + 1}:`, error);
-      }
-    });
-
-    // Load all in parallel
-    await Promise.allSettled(preloadPromises);
-  }, []);
-
   const nextSlide = useCallback(() => {
     setCurrentSlide((prev) => (prev + 1) % slides.length);
   }, []);
@@ -578,13 +550,6 @@ export const DemoTourModal = ({ open, onOpenChange }: DemoTourModalProps) => {
   const prevSlide = useCallback(() => {
     setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
   }, []);
-
-  // Preload all audio when modal opens
-  useEffect(() => {
-    if (open) {
-      preloadAllAudio();
-    }
-  }, [open, preloadAllAudio]);
 
   // Play narration when slide changes
   useEffect(() => {
