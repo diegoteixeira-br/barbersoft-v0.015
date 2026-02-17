@@ -46,15 +46,10 @@ export default function Servicos() {
   };
 
   const handleOpenModal = (service?: Service) => {
-    if (service) {
-      requirePassword(() => {
-        setEditingService(service);
-        setIsModalOpen(true);
-      });
-    } else {
-      setEditingService(null);
+    requirePassword(() => {
+      setEditingService(service || null);
       setIsModalOpen(true);
-    }
+    });
   };
 
   const handleCloseModal = () => {
