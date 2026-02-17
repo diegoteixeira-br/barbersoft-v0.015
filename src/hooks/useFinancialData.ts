@@ -119,6 +119,7 @@ export function calculateProfit(totalPrice: number, commissionRate: number | nul
 
 // Calculate card fee based on payment method
 // Uses barber-specific fees if available, otherwise global fees
+// Supports split payments (e.g., "credit_card:30.00|pix:15.00")
 export function calculateCardFee(
   totalPrice: number,
   paymentMethod: string | null,
@@ -127,6 +128,26 @@ export function calculateCardFee(
   barberDebitFee?: number | null,
   barberCreditFee?: number | null
 ): number {
+  if (!paymentMethod) return 0;
+
+  // Handle split payments
+  if (paymentMethod.includes("|")) {
+    const parts = paymentMethod.split("|");
+    let totalFee = 0;
+    for (const part of parts) {
+      const [method, amountStr] = part.split(":");
+      const amount = parseFloat(amountStr) || 0;
+      if (method === "debit_card") {
+        const fee = barberDebitFee ?? debitFeePercent;
+        totalFee += amount * (fee / 100);
+      } else if (method === "credit_card") {
+        const fee = barberCreditFee ?? creditFeePercent;
+        totalFee += amount * (fee / 100);
+      }
+    }
+    return totalFee;
+  }
+
   if (paymentMethod === "debit_card") {
     const fee = barberDebitFee ?? debitFeePercent;
     return totalPrice * (fee / 100);
