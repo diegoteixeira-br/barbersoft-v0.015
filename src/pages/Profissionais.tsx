@@ -43,17 +43,10 @@ export default function Profissionais() {
   };
 
   const handleOpenModal = (barber?: Barber) => {
-    if (barber) {
-      // Editing existing - require password
-      requirePassword(() => {
-        setEditingBarber(barber);
-        setIsModalOpen(true);
-      });
-    } else {
-      // Creating new - no password needed
-      setEditingBarber(null);
+    requirePassword(() => {
+      setEditingBarber(barber || null);
       setIsModalOpen(true);
-    }
+    });
   };
 
   const handleCloseModal = () => {
