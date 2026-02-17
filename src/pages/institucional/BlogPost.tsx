@@ -80,7 +80,8 @@ const BlogPost = () => {
     .filter(p => p.category === post.category && String(p.id) !== String(post.id))
     .slice(0, 2);
 
-  const shareUrl = `https://lgrugpsyewvinlkgmeve.supabase.co/functions/v1/blog-share?slug=${post.slug}`;
+  const shareUrl = `https://lgrugpsyewvinlkgmeve.supabase.co/functions/v1/blog-share?slug=${encodeURIComponent(post.slug)}`;
+  const encodedShareUrl = encodeURIComponent(shareUrl);
   const shareText = encodeURIComponent(post.title);
 
   const schema = {
@@ -159,22 +160,22 @@ const BlogPost = () => {
             </span>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" asChild>
-                <a href={`https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`} target="_blank" rel="noopener noreferrer">
+                <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodedShareUrl}`} target="_blank" rel="noopener noreferrer">
                   <Facebook className="h-4 w-4 mr-2" />Facebook
                 </a>
               </Button>
               <Button variant="outline" size="sm" asChild>
-                <a href={`https://twitter.com/intent/tweet?url=${shareUrl}&text=${shareText}`} target="_blank" rel="noopener noreferrer">
+                <a href={`https://twitter.com/intent/tweet?url=${encodedShareUrl}&text=${shareText}`} target="_blank" rel="noopener noreferrer">
                   <Twitter className="h-4 w-4 mr-2" />Twitter
                 </a>
               </Button>
               <Button variant="outline" size="sm" asChild>
-                <a href={`https://www.linkedin.com/shareArticle?mini=true&url=${shareUrl}&title=${shareText}`} target="_blank" rel="noopener noreferrer">
+                <a href={`https://www.linkedin.com/shareArticle?mini=true&url=${encodedShareUrl}&title=${shareText}`} target="_blank" rel="noopener noreferrer">
                   <Linkedin className="h-4 w-4 mr-2" />LinkedIn
                 </a>
               </Button>
               <Button variant="outline" size="sm" asChild>
-                <a href={`https://api.whatsapp.com/send?text=${shareText}%20${encodeURIComponent(shareUrl)}`} target="_blank" rel="noopener noreferrer">
+                <a href={`https://api.whatsapp.com/send?text=${shareText}%20${encodedShareUrl}`} target="_blank" rel="noopener noreferrer">
                   <MessageCircle className="h-4 w-4 mr-2" />WhatsApp
                 </a>
               </Button>

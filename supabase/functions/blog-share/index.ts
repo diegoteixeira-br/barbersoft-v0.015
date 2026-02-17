@@ -1,12 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Blog posts data - kept in sync with src/data/blogPosts.ts
-const blogPosts = [
+// Static blog posts fallback
+const staticPosts = [
   {
     slug: 'dicas-aumentar-faturamento-barbearia',
     title: '10 Dicas para Aumentar o Faturamento da Sua Barbearia',
@@ -47,9 +48,9 @@ const blogPosts = [
 
 const SITE_URL = 'https://barbersoft.com.br';
 const SITE_NAME = 'BarberSoft';
+const FALLBACK_IMAGE = `${SITE_URL}/og-social-final.png`;
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -61,66 +62,87 @@ serve(async (req) => {
     console.log('Blog share request for slug:', slug);
 
     if (!slug) {
-      return new Response(
-        JSON.stringify({ error: 'Slug parameter is required' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
+      return new Response(null, {
+        status: 302,
+        headers: { ...corsHeaders, 'Location': `${SITE_URL}/blog` },
+      });
     }
 
-    const post = blogPosts.find(p => p.slug === slug);
+    // 1. Try static posts first
+    let post = staticPosts.find(p => p.slug === slug);
+
+    // 2. If not found, query from database
+    if (!post) {
+      try {
+        const supabase = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+        );
+
+        const { data } = await supabase
+          .from("blog_posts")
+          .select("slug, title, excerpt, image_url")
+          .eq("slug", slug)
+          .maybeSingle();
+
+        if (data) {
+          post = {
+            slug: data.slug,
+            title: data.title,
+            excerpt: data.excerpt || '',
+            image: data.image_url || FALLBACK_IMAGE,
+          };
+        }
+      } catch (dbError) {
+        console.error('DB lookup error:', dbError);
+      }
+    }
 
     if (!post) {
       console.log('Post not found, redirecting to blog');
-      // Redirect to blog if post not found
       return new Response(null, {
         status: 302,
-        headers: {
-          ...corsHeaders,
-          'Location': `${SITE_URL}/blog`,
-        },
+        headers: { ...corsHeaders, 'Location': `${SITE_URL}/blog` },
       });
     }
 
     const articleUrl = `${SITE_URL}/blog/${post.slug}`;
     const fullTitle = `${post.title} | ${SITE_NAME}`;
+    const imageUrl = post.image || FALLBACK_IMAGE;
 
     console.log('Generating HTML for post:', post.title);
-    console.log('Image URL:', post.image);
+    console.log('Image URL:', imageUrl);
 
-    // Generate HTML with proper Open Graph meta tags
     const html = `<!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" prefix="og: https://ogp.me/ns#">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <!-- Primary Meta Tags -->
   <title>${fullTitle}</title>
   <meta name="title" content="${fullTitle}">
   <meta name="description" content="${post.excerpt}">
   
-  <!-- Open Graph / Facebook -->
   <meta property="og:type" content="article">
   <meta property="og:url" content="${articleUrl}">
-  <meta property="og:title" content="${fullTitle}">
+  <meta property="og:title" content="${post.title}">
   <meta property="og:description" content="${post.excerpt}">
-  <meta property="og:image" content="${post.image}">
+  <meta property="og:image" content="${imageUrl}">
+  <meta property="og:image:url" content="${imageUrl}">
+  <meta property="og:image:secure_url" content="${imageUrl}">
+  <meta property="og:image:type" content="image/jpeg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="${post.title}">
   <meta property="og:site_name" content="${SITE_NAME}">
   <meta property="og:locale" content="pt_BR">
   
-  <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:url" content="${articleUrl}">
-  <meta name="twitter:title" content="${fullTitle}">
+  <meta name="twitter:title" content="${post.title}">
   <meta name="twitter:description" content="${post.excerpt}">
-  <meta name="twitter:image" content="${post.image}">
+  <meta name="twitter:image" content="${imageUrl}">
   
-  <!-- Redirect to actual article page after crawlers read the meta tags -->
   <meta http-equiv="refresh" content="0;url=${articleUrl}">
   
   <style>
@@ -134,28 +156,18 @@ serve(async (req) => {
       background: #1a1a1a;
       color: #fff;
     }
-    .loading {
-      text-align: center;
-    }
+    .loading { text-align: center; }
     .spinner {
-      width: 40px;
-      height: 40px;
+      width: 40px; height: 40px;
       border: 3px solid #333;
       border-top-color: #d4af37;
       border-radius: 50%;
       animation: spin 1s linear infinite;
       margin: 0 auto 1rem;
     }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    a {
-      color: #d4af37;
-      text-decoration: none;
-    }
-    a:hover {
-      text-decoration: underline;
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    a { color: #d4af37; text-decoration: none; }
+    a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -164,30 +176,23 @@ serve(async (req) => {
     <p>Redirecionando para o artigo...</p>
     <p><a href="${articleUrl}">Clique aqui se não for redirecionado</a></p>
   </div>
-  <script>
-    // Fallback redirect via JavaScript
-    window.location.href = "${articleUrl}";
-  </script>
+  <script>window.location.replace("${articleUrl}");</script>
 </body>
 </html>`;
 
     return new Response(html, {
       status: 200,
       headers: {
-        ...corsHeaders,
         'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+        'Cache-Control': 'public, max-age=3600',
       },
     });
 
   } catch (error) {
     console.error('Error in blog-share function:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    );
+    return new Response(null, {
+      status: 302,
+      headers: { 'Location': `${SITE_URL}/blog` },
+    });
   }
 });
