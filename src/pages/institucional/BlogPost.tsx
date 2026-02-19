@@ -169,7 +169,7 @@ const BlogPost = () => {
                 </a>
               </Button>
               <Button variant="outline" size="sm" asChild>
-                <a href={`https://api.whatsapp.com/send?text=${shareText}%20${encodedSiteUrl}`} target="_blank" rel="noopener noreferrer">
+                <a href={`https://api.whatsapp.com/send?text=${shareText}%20${encodedEdgeFunctionUrl}`} target="_blank" rel="noopener noreferrer">
                   <MessageCircle className="h-4 w-4 mr-2" />WhatsApp
                 </a>
               </Button>
