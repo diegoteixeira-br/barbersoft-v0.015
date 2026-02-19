@@ -82,25 +82,65 @@ serve(async (req) => {
 
     switch (action) {
       case 'create': {
-        // CLEANUP: Delete any existing instance for this unit before creating new one
-        if (unit.evolution_instance_name) {
-          console.log(`Cleaning up previous instance before create: ${unit.evolution_instance_name}`);
+        // CLEANUP: Find and delete ALL existing instances for this unit (prevents duplicates)
+        const unitPrefix = `unit_${unit.id.substring(0, 8)}_`;
+        console.log(`Looking for existing instances with prefix: ${unitPrefix}`);
+        
+        try {
+          const allInstancesRes = await fetch(`${EVOLUTION_API_URL}/instance/fetchInstances`, {
+            method: 'GET',
+            headers: { 'apikey': EVOLUTION_GLOBAL_KEY! },
+          });
+          
+          if (allInstancesRes.ok) {
+            const allInstances = await allInstancesRes.json();
+            const matchingInstances = Array.isArray(allInstances) 
+              ? allInstances.filter((inst: any) => {
+                  const name = inst.instanceName || inst.instance?.instanceName || '';
+                  return name.startsWith(unitPrefix);
+                })
+              : [];
+            
+            console.log(`Found ${matchingInstances.length} existing instances for this unit`);
+            
+            for (const inst of matchingInstances) {
+              const oldName = inst.instanceName || inst.instance?.instanceName;
+              if (oldName) {
+                console.log(`Deleting old instance: ${oldName}`);
+                try {
+                  await fetch(`${EVOLUTION_API_URL}/instance/logout/${oldName}`, {
+                    method: 'DELETE',
+                    headers: { 'apikey': EVOLUTION_GLOBAL_KEY! },
+                  });
+                } catch (e) { /* non-critical */ }
+                try {
+                  await fetch(`${EVOLUTION_API_URL}/instance/delete/${oldName}`, {
+                    method: 'DELETE',
+                    headers: { 'apikey': EVOLUTION_GLOBAL_KEY! },
+                  });
+                } catch (e) { /* non-critical */ }
+              }
+            }
+          }
+        } catch (e) {
+          console.log('Fetch all instances error (non-critical):', e);
+        }
+
+        // Also cleanup the specific instance stored in DB if it has a different prefix
+        if (unit.evolution_instance_name && !unit.evolution_instance_name.startsWith(unitPrefix)) {
+          console.log(`Cleaning up DB instance with different prefix: ${unit.evolution_instance_name}`);
           try {
             await fetch(`${EVOLUTION_API_URL}/instance/logout/${unit.evolution_instance_name}`, {
               method: 'DELETE',
               headers: { 'apikey': EVOLUTION_GLOBAL_KEY! },
             });
-          } catch (e) {
-            console.log('Logout previous instance error (non-critical):', e);
-          }
+          } catch (e) { /* non-critical */ }
           try {
             await fetch(`${EVOLUTION_API_URL}/instance/delete/${unit.evolution_instance_name}`, {
               method: 'DELETE',
               headers: { 'apikey': EVOLUTION_GLOBAL_KEY! },
             });
-          } catch (e) {
-            console.log('Delete previous instance error (non-critical):', e);
-          }
+          } catch (e) { /* non-critical */ }
         }
 
         // Generate unique instance name and token
