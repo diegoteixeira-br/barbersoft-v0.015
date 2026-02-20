@@ -36,7 +36,7 @@ export function useBlogPosts() {
   });
 
   const createPost = useMutation({
-    mutationFn: async (post: BlogPostInput) => {
+    mutationFn: async (post: BlogPostInput): Promise<BlogPost> => {
       const { data, error } = await supabase
         .from("blog_posts" as any)
         .insert(post as any)

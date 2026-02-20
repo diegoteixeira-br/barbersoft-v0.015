@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.manage-stripe-keys]
 verify_jwt = false
+
+[functions.notify-blog-post]
+verify_jwt = false
