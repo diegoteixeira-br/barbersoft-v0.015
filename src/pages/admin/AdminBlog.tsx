@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, FileText, Download } from "lucide-react";
+import { Plus, Pencil, Trash2, FileText, Download, Bell } from "lucide-react";
 import { useBlogPosts, type BlogPost } from "@/hooks/useBlogPosts";
 import { BlogPostFormModal } from "@/components/admin/BlogPostFormModal";
 import { blogPosts as staticPosts } from "@/data/blogPosts";
@@ -20,12 +20,36 @@ export default function AdminBlog() {
   const [editingPost, setEditingPost] = useState<BlogPost | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [notifying, setNotifying] = useState<string | null>(null);
+
+  const notifyUsers = async (post: { title: string; slug: string; excerpt?: string | null; image_url?: string | null }) => {
+    setNotifying(post.slug);
+    try {
+      const { data, error } = await supabase.functions.invoke("notify-blog-post", {
+        body: { title: post.title, slug: post.slug, excerpt: post.excerpt, image_url: post.image_url },
+      });
+      if (error) throw error;
+      toast.success(`Notificação enviada! ${data.sent} email(s) enviado(s)${data.failed ? `, ${data.failed} falha(s)` : ""}`);
+    } catch (err: any) {
+      toast.error("Erro ao notificar: " + (err.message || "Erro desconhecido"));
+    } finally {
+      setNotifying(null);
+    }
+  };
 
   const handleSave = (data: any) => {
     if (data.id) {
       updatePost.mutate(data, { onSuccess: () => setFormOpen(false) });
     } else {
-      createPost.mutate(data, { onSuccess: () => setFormOpen(false) });
+      createPost.mutate(data, {
+        onSuccess: (newPost) => {
+          setFormOpen(false);
+          // Auto-notify on new post creation
+          if (newPost) {
+            notifyUsers(newPost);
+          }
+        },
+      });
     }
   };
 
@@ -147,6 +171,16 @@ export default function AdminBlog() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => notifyUsers(post)}
+                            disabled={notifying === post.slug}
+                            className="text-orange-400 hover:text-orange-300"
+                            title="Notificar usuários por email"
+                          >
+                            <Bell className="h-4 w-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
